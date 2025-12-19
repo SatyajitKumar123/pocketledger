@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PocketLedger</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <h1 class="text-center mb-4">PocketLedger</h1>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card p-4">
+                <h4>Add Transaction</h4>
+                <form id="transactionForm">
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="title" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount</label>
+                        <input type="number" id="amount" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select id="type" class="form-select">
+                            <option value="IN">Income</option>
+                            <option value="EX">Expense</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Add</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card p-4">
+                <h4>Recent Transactions</h4>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Amount</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionList">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_URL = 'http://127.0.0.1:8000/api/transactions/';
+
+    // 1. Function to fetch data from Django
+    async function fetchTransactions() {
+        const response = await fetch(API_URL);
+        const data = await response.json();
+        const list = document.getElementById('transactionList');
+        list.innerHTML = ''; // Clear current list
+
+        data.forEach(txn => {
+            const row = `<tr>
+                <td>${txn.title}</td>
+                <td>$${txn.amount}</td>
+                <td><span class="badge ${txn.type === 'IN' ? 'text-bg-success' : 'text-bg-danger'}">${txn.type}</span></td>
+            </tr>`;
+            list.innerHTML += row;
+        });
+    }
+
+    // 2. Handle Form Submit
+    document.getElementById('transactionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            title: document.getElementById('title').value,
+            amount: document.getElementById('amount').value,
+            type: document.getElementById('type').value
+        };
+
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        // Clear form and refresh list
+        document.getElementById('transactionForm').reset();
+        fetchTransactions();
+    });
+
+    // Load data when page opens
+    fetchTransactions();
+</script>
+
+</body>
+</html>
