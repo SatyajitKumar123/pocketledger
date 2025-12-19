@@ -35,7 +35,7 @@
     <div class="row">
         <div class="col-md-4">
             <div class="card p-4">
-                <h4>Add Transaction</h4>
+                <h4 id="formTitle">Add Transaction</h4>
                 <form id="transactionForm">
                     <div class="mb-3">
                         <label class="form-label">Title</label>
@@ -52,20 +52,28 @@
                             <option value="EX">Expense</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Add</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary w-100">Add Transaction</button>
+                    
+                    <button type="button" id="cancelBtn" class="btn btn-secondary w-100 mt-2 d-none" onclick="resetForm()">Cancel Edit</button>
                 </form>
             </div>
         </div>
 
         <div class="col-md-8">
             <div class="card p-4">
-                <h4>Recent Transactions</h4>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4>History</h4>
+                    <button class="btn btn-danger btn-sm" onclick="clearAllTransactions()">Clear History</button>
+                </div>
+
                 <table class="table table-striped">
                     <thead>
                         <tr>
+                            <th>Date</th>
                             <th>Title</th>
                             <th>Amount</th>
                             <th>Type</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="transactionList">
@@ -77,9 +85,12 @@
 </div>
 
 <script>
-    // NOTE: Change this URL if you deploy to PythonAnywhere
     const API_URL = 'http://127.0.0.1:8000/api/transactions/';
+    
+    // STATE VARIABLE: Keeps track of which ID we are editing (null means we are adding new)
+    let editingId = null;
 
+    // 1. Fetch and Display
     async function fetchTransactions() {
         const response = await fetch(API_URL);
         const data = await response.json();
@@ -87,34 +98,41 @@
         const list = document.getElementById('transactionList');
         list.innerHTML = ''; 
 
-        // Variables to hold the sums
         let income = 0;
         let expense = 0;
 
         data.forEach(txn => {
-            // 1. Calculate Totals
             const amount = parseFloat(txn.amount);
-            if (txn.type === 'IN') {
-                income += amount;
-            } else {
-                expense += amount;
-            }
+            if (txn.type === 'IN') income += amount;
+            else expense += amount;
 
-            // 2. Build the Table Row
+            const dateStr = new Date(txn.created_at).toLocaleDateString();
+
+            // Note: We pass the data into the startEdit function carefully
             const row = `<tr>
+                <td class="small text-muted">${dateStr}</td>
                 <td>${txn.title}</td>
                 <td>$${amount.toFixed(2)}</td>
                 <td><span class="badge ${txn.type === 'IN' ? 'text-bg-success' : 'text-bg-danger'}">${txn.type}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-warning me-1" 
+                        onclick="startEdit(${txn.id}, '${txn.title}', ${txn.amount}, '${txn.type}')">
+                        ✎
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${txn.id})">
+                        &times;
+                    </button>
+                </td>
             </tr>`;
             list.innerHTML += row;
         });
 
-        // 3. Update the Dashboard Text
         document.getElementById('totalIncome').innerText = `$${income.toFixed(2)}`;
         document.getElementById('totalExpense').innerText = `$${expense.toFixed(2)}`;
         document.getElementById('totalBalance').innerText = `$${(income - expense).toFixed(2)}`;
     }
 
+    // 2. Handle Submit (Create OR Update)
     document.getElementById('transactionForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -124,15 +142,71 @@
             type: document.getElementById('type').value
         };
 
-        await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        if (editingId) {
+            // === UPDATE MODE (PUT) ===
+            await fetch(`${API_URL}${editingId}/`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            editingId = null; // Reset mode
+        } else {
+            // === CREATE MODE (POST) ===
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
 
-        document.getElementById('transactionForm').reset();
+        resetForm();
         fetchTransactions();
     });
+
+    // 3. Edit Logic (Fills the form)
+    function startEdit(id, title, amount, type) {
+        editingId = id; // Set the state
+        
+        // Fill the inputs
+        document.getElementById('title').value = title;
+        document.getElementById('amount').value = amount;
+        document.getElementById('type').value = type;
+
+        // Change UI to look like "Edit Mode"
+        document.getElementById('formTitle').innerText = "Edit Transaction";
+        document.getElementById('submitBtn').innerText = "Update Transaction";
+        document.getElementById('submitBtn').classList.remove('btn-primary');
+        document.getElementById('submitBtn').classList.add('btn-warning');
+        
+        // Show Cancel Button
+        document.getElementById('cancelBtn').classList.remove('d-none');
+    }
+
+    // 4. Reset Form (Back to Add Mode)
+    function resetForm() {
+        editingId = null;
+        document.getElementById('transactionForm').reset();
+        
+        // Reset UI
+        document.getElementById('formTitle').innerText = "Add Transaction";
+        document.getElementById('submitBtn').innerText = "Add Transaction";
+        document.getElementById('submitBtn').classList.add('btn-primary');
+        document.getElementById('submitBtn').classList.remove('btn-warning');
+        document.getElementById('cancelBtn').classList.add('d-none');
+    }
+
+    // 5. Delete Logic
+    async function deleteTransaction(id) {
+        if(!confirm("Delete this transaction?")) return;
+        await fetch(`${API_URL}${id}/`, { method: 'DELETE' });
+        fetchTransactions();
+    }
+
+    async function clearAllTransactions() {
+        if(!confirm("Are you sure you want to delete EVERYTHING?")) return;
+        await fetch(`${API_URL}clear_all/`, { method: 'DELETE' });
+        fetchTransactions();
+    }
 
     fetchTransactions();
 </script>
